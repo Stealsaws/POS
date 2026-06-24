@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>POS — ขายหน้าร้าน (RTS)</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* ── ใช้ Midnight Frost CSS variables ชุดเดียวกับ RTS เพื่อความต่อเนื่อง ── */
+*{-webkit-tap-highlight-color:transparent;box-sizing:border-box;}
+body{font-family:'Inter',sans-serif;margin:0;background:var(--bg);min-height:100vh;}
+:root{
+  --bg:#EEF2FF;--surf:#fff;--surf2:#E8EEFF;--bdr:#C7D0F0;
+  --t1:#0D1B3E;--t2:#3A4568;--t3:#8B98C8;
+  --or:#FF6B2B;--or2:#C84800;--or-bg:#FFE8D6;--or-bdr:#C84800;--or-t:#6B2000;
+  --nv:#1E3A8A;--nv-bg:#DBEAFE;--nv-t:#0D2260;
+  --gn:#15803D;--gn-bg:#DCFCE7;--gn-t:#0A3318;
+  --rd-bg:#FEE2E2;--rd-t:#991B1B;
+  --am-bg:#FEF3C7;--am-t:#78350F;
+  --pu-bg:#F3E8FF;--pu-t:#6B21A8;
+  --tb:#1E3A8A;--tb2:#162D6E;
+}
+.night{
+  --bg:#0D1117;--surf:#161B27;--surf2:#1C2233;--bdr:#2A3352;
+  --t1:#E8EEFF;--t2:#8891AB;--t3:#4A5578;
+  --or:#FF6B2B;--or2:#FF8C55;--or-bg:#2A1500;--or-bdr:#FF6B2B;--or-t:#FFAA80;
+  --nv:#3B82F6;--nv-bg:#0F1A35;--nv-t:#93C5FD;
+  --gn:#22C55E;--gn-bg:#052e16;--gn-t:#86EFAC;
+  --rd-bg:#1F0808;--rd-t:#FCA5A5;
+  --am-bg:#1A1000;--am-t:#FCD34D;
+  --pu-bg:#1E0A35;--pu-t:#D8B4FE;
+  --tb:#0A0F1E;--tb2:#060810;
+}
+body,#appScreen,.rts-card{transition:background .25s,color .25s,border-color .25s;}
+
+#toast-container{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:.5rem;pointer-events:none;width:max-content;max-width:calc(100vw - 2rem);}
+.toast{display:flex;align-items:center;gap:.5rem;padding:.65rem 1rem;border-radius:.75rem;font-size:.8rem;font-weight:700;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.2);animation:toastIn .25s cubic-bezier(.34,1.56,.64,1) forwards;pointer-events:auto;}
+.toast.removing{animation:toastOut .2s ease-in forwards;}
+.toast-success{background:#059669;}.toast-error{background:#dc2626;}.toast-info{background:#1E3A8A;}.toast-warn{background:#d97706;}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes toastOut{from{opacity:1}to{opacity:0;transform:translateY(8px) scale(.95)}}
+
+.rts-card{background:var(--surf);border:1.5px solid var(--bdr);border-radius:12px;padding:14px;}
+.rts-input{width:100%;padding:.65rem .85rem;border:1.5px solid var(--bdr);border-radius:.65rem;font-size:.85rem;color:var(--t1);background:var(--surf);font-family:'Inter',sans-serif;outline:none;transition:border-color .15s;}
+.rts-input:focus{border-color:var(--nv);}
+.rts-select{width:100%;padding:.65rem .85rem;border:1.5px solid var(--bdr);border-radius:.65rem;font-size:.85rem;color:var(--t1);background:var(--surf);font-family:'Inter',sans-serif;outline:none;cursor:pointer;}
+.rts-label{font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;}
+.abtn{font-size:12px;font-weight:900;padding:9px 14px;border-radius:8px;border:2px solid;cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:'Inter',sans-serif;transition:all .12s;}
+.abtn:active{transform:scale(.97);}
+.abtn:disabled{opacity:.45;cursor:not-allowed;}
+.btn-solid-nv{background:var(--nv);color:#fff;border-color:var(--tb2);}
+.btn-solid-or{background:var(--or);color:#fff;border-color:var(--or2);}
+.btn-solid-gn{background:var(--gn);color:#fff;border-color:#0f5f2e;}
+.btn-rd{background:var(--rd-bg);color:var(--rd-t);border-color:#FCA5A5;}
+.btn-gray{background:var(--surf2);color:var(--t2);border-color:var(--bdr);}
+.pill{display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;}
+.pill-g{background:var(--gn-bg);color:var(--gn-t);}
+.pill-r{background:var(--rd-bg);color:var(--rd-t);}
+.pill-o{background:var(--or-bg);color:var(--or-t);border:1px solid var(--or-bdr);}
+.pill-am{background:var(--am-bg);color:var(--am-t);}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);z-index:200;display:none;align-items:center;justify-content:center;padding:1rem;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:var(--surf);border-radius:1rem;box-shadow:0 20px 60px rgba(0,0,0,.2);width:100%;padding:1.5rem;border:1.5px solid var(--bdr);}
+.modal-title{font-size:15px;font-weight:900;color:var(--t1);margin-bottom:1rem;}
+.tab-btn{font-size:11px;font-weight:800;padding:7px 8px;border-radius:7px;border:2px solid transparent;cursor:pointer;flex:1;font-family:'Inter',sans-serif;background:transparent;color:var(--t2);}
+.tab-btn.on-or{background:var(--or-bg);color:var(--or-t);border-color:var(--or-bdr);}
+.promo-badge{display:inline-block;font-size:9px;font-weight:800;background:var(--rd-bg);color:var(--rd-t);padding:1px 5px;border-radius:4px;margin-left:3px;white-space:nowrap;}
+.price-strike{text-decoration:line-through;color:var(--t3);font-size:11px;margin-right:4px;}
+
+/* ── POS เฉพาะ ── */
+.pos-topbar{height:54px;background:var(--tb);border-bottom:2px solid var(--tb2);display:flex;align-items:center;justify-content:space-between;padding:0 14px;position:sticky;top:0;z-index:50;gap:10px;}
+.pt-badge{background:var(--or);color:#fff;font-size:11px;font-weight:900;padding:3px 8px;border-radius:5px;}
+.pt-name{font-size:12px;font-weight:800;color:#fff;line-height:1.2;}
+.pt-sub{font-size:9px;font-weight:600;color:rgba(255,255,255,.45);}
+.sync-pill{font-size:11px;font-weight:800;padding:5px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;}
+.sync-on{background:rgba(34,197,94,.18);color:#86efac;}
+.sync-off{background:rgba(239,68,68,.18);color:#fca5a5;}
+.icon-btn{width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;cursor:pointer;}
+.user-ava{width:32px;height:32px;border-radius:50%;background:var(--or);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;flex-shrink:0;}
+
+.pos-shell{display:flex;gap:12px;padding:12px;min-height:calc(100vh - 54px);align-items:flex-start;}
+.pos-left{flex:1;min-width:0;}
+.pos-right{width:360px;flex-shrink:0;position:sticky;top:66px;}
+@media(max-width:860px){.pos-shell{flex-direction:column;}.pos-right{width:100%;position:static;}}
+
+.scan-bar{display:flex;gap:8px;margin-bottom:10px;}
+.product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;}
+.product-tile{background:var(--surf);border:1.5px solid var(--bdr);border-radius:10px;padding:10px;cursor:pointer;display:flex;flex-direction:column;gap:4px;position:relative;}
+.product-tile:hover{border-color:var(--nv);}
+.product-tile.out{opacity:.5;}
+.pt-sku{font-size:9px;font-family:'Courier New',monospace;color:var(--t3);}
+.pt-pname{font-size:12px;font-weight:800;color:var(--t1);line-height:1.3;min-height:31px;}
+.pt-price{font-size:14px;font-weight:900;color:var(--nv-t);margin-top:2px;}
+.pt-qty{position:absolute;top:6px;right:6px;font-size:9px;font-weight:800;padding:2px 6px;border-radius:10px;}
+.pt-edit{position:absolute;bottom:6px;right:6px;font-size:11px;background:var(--surf2);border:1px solid var(--bdr);border-radius:6px;padding:2px 5px;cursor:pointer;}
+
+.cart-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1.5px solid var(--surf2);}
+.cart-item:last-child{border:none;}
+.ci-info{flex:1;min-width:0;}
+.ci-name{font-size:12px;font-weight:800;color:var(--t1);}
+.ci-price{font-size:10px;color:var(--t3);}
+.qty-stepper{display:flex;align-items:center;gap:6px;}
+.qs-btn{width:24px;height:24px;border-radius:6px;background:var(--surf2);border:1px solid var(--bdr);cursor:pointer;font-weight:900;color:var(--t2);}
+.qs-val{font-size:13px;font-weight:800;color:var(--t1);width:24px;text-align:center;}
+.ci-total{font-size:13px;font-weight:900;color:var(--gn-t);width:64px;text-align:right;}
+.ci-del{color:var(--rd-t);cursor:pointer;font-size:16px;font-weight:900;width:18px;text-align:center;}
+.totals-row{display:flex;justify-content:space-between;font-size:12px;color:var(--t2);padding:3px 0;}
+.totals-row.grand{font-size:18px;font-weight:900;color:var(--t1);border-top:1.5px solid var(--bdr);margin-top:6px;padding-top:10px;}
+
+.pay-row{display:flex;gap:6px;margin-bottom:6px;align-items:center;}
+.receipt-box{font-family:'Courier New',monospace;font-size:12px;color:#000;background:#fff;padding:16px;}
+.receipt-box .rline{display:flex;justify-content:space-between;}
+.receipt-box hr{border:none;border-top:1px dashed #999;margin:8px 0;}
+@media print{
+  body *{visibility:hidden;}
+  #receiptPrintArea, #receiptPrintArea *{visibility:visible;}
+  #receiptPrintArea{position:absolute;left:0;top:0;width:100%;}
+}
+</style>
+</head>
+<body>
+<div id="toast-container"></div>
+
+<!-- SETUP (ครั้งแรกที่เปิดเครื่องนี้เท่านั้น) -->
+<div id="setupScreen" style="min-height:100vh;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:1rem;">
+  <div class="rts-card" style="width:100%;max-width:380px;padding:2rem;">
+    <div style="text-align:center;margin-bottom:1.25rem;">
+      <div style="display:inline-block;background:var(--or);color:#fff;font-size:13px;font-weight:900;padding:5px 12px;border-radius:7px;margin-bottom:8px;">POS</div>
+      <div style="font-size:18px;font-weight:900;color:var(--t1);">ตั้งค่าเครื่องนี้ (ครั้งแรก)</div>
+      <div style="font-size:11px;color:var(--t3);margin-top:3px;">ทำครั้งเดียวต่อเครื่อง — เลือกสาขาที่เครื่องนี้ตั้งอยู่ถาวร</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
+      <div><label class="rts-label">รหัสสาขา</label><input id="setupBranch" class="rts-input" placeholder="เช่น 16CB" autocapitalize="characters" style="text-transform:uppercase;"></div>
+      <div><label class="rts-label">หมายเลขเครื่อง</label><input id="setupTermNo" class="rts-input" placeholder="เช่น 01, 02" maxlength="3"></div>
+      <div><label class="rts-label">ชื่อเครื่อง (ถ้ามี)</label><input id="setupTermName" class="rts-input" placeholder="เช่น แคชเชียร์หน้าประตู"></div>
+    </div>
+    <button onclick="saveSetup()" id="setupBtn" class="abtn btn-solid-nv" style="width:100%;padding:.85rem;font-size:.95rem;">บันทึกและไปหน้า Login</button>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="loginScreen" style="display:none;min-height:100vh;background:var(--bg);align-items:center;justify-content:center;padding:1rem;">
+  <div class="rts-card" style="width:100%;max-width:380px;padding:2.5rem;">
+    <div style="text-align:center;margin-bottom:1.5rem;">
+      <div style="display:inline-block;background:var(--or);color:#fff;font-size:13px;font-weight:900;padding:5px 12px;border-radius:7px;margin-bottom:8px;">POS</div>
+      <div style="font-size:20px;font-weight:900;color:var(--t1);">ขายหน้าร้าน</div>
+      <div id="loginTerminalInfo" style="font-size:11px;color:var(--t3);margin-top:3px;"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
+      <div><label class="rts-label">Username</label><input type="text" id="loginUser" class="rts-input" autocapitalize="none"></div>
+      <div><label class="rts-label">Password</label><input type="password" id="loginPass" class="rts-input"></div>
+    </div>
+    <button onclick="doLogin()" id="loginBtn" class="abtn btn-solid-nv" style="width:100%;padding:.85rem;font-size:.95rem;">เข้าสู่ระบบ</button>
+    <p id="loginError" style="font-size:12px;color:var(--rd-t);text-align:center;margin-top:8px;display:none;"></p>
+    <p style="text-align:center;margin-top:14px;"><a href="#" onclick="resetTerminalSetup();return false;" style="font-size:11px;color:var(--t3);">⚙️ ตั้งค่าเครื่องใหม่</a></p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appScreen" style="display:none;">
+  <div class="pos-topbar">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="pt-badge">POS</span>
+      <div><div class="pt-name" id="ptBranch">-</div><div class="pt-sub" id="ptTerminal">-</div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="sync-pill sync-on" id="syncBadge">🟢 ออนไลน์</span>
+      <button class="icon-btn" onclick="openPriceManager()" id="priceMgrBtn" title="ตั้งราคา" style="display:none;">💰</button>
+      <button class="icon-btn" onclick="toggleTheme()"><span id="themeIcon">🌙</span></button>
+      <div class="user-ava" id="userAva">-</div>
+      <button class="icon-btn" onclick="doLogout()" title="ออกจากระบบ">⎋</button>
+    </div>
+  </div>
+
+  <div class="pos-shell">
+    <div class="pos-left">
+      <div class="scan-bar">
+        <input id="scanInput" class="rts-input" placeholder="สแกนบาร์โค้ด หรือค้นหาชื่อ/SKU... (Enter เพื่อสแกน)" autocomplete="off" style="font-size:14px;">
+      </div>
+      <div id="productGrid" class="product-grid"></div>
+      <p id="catalogEmpty" style="display:none;text-align:center;color:var(--t3);font-size:12px;padding:32px;">ยังไม่มีสินค้าที่ตั้งราคาไว้ — กดปุ่ม 💰 ด้านบนเพื่อตั้งราคา</p>
+    </div>
+
+    <div class="pos-right">
+      <div class="rts-card" style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <span style="font-size:13px;font-weight:900;color:var(--t1);">🛒 รายการขาย</span>
+          <span id="cartCount" style="font-size:11px;color:var(--t3);"></span>
+        </div>
+        <div id="cartItems"><p style="font-size:12px;color:var(--t3);text-align:center;padding:20px;">ยังไม่มีสินค้าในตะกร้า</p></div>
+      </div>
+      <div class="rts-card">
+        <div style="margin-bottom:8px;"><label class="rts-label">ส่วนลดทั้งบิล (บาท)</label><input type="number" id="discountInput" class="rts-input" value="0" min="0" oninput="renderCart()"></div>
+        <div class="totals-row"><span>ยอดรวมสินค้า</span><span id="sumSubtotal">฿0</span></div>
+        <div class="totals-row"><span>ส่วนลด</span><span id="sumDiscount">-฿0</span></div>
+        <div class="totals-row"><span>VAT (รวมในราคาแล้ว)</span><span id="sumVat">฿0</span></div>
+        <div class="totals-row grand"><span>รวมสุทธิ</span><span id="sumTotal">฿0</span></div>
+        <button onclick="openCheckout()" id="checkoutBtn" class="abtn btn-solid-or" style="width:100%;padding:12px;margin-top:10px;font-size:14px;" disabled>💳 ชำระเงิน</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CHECKOUT MODAL -->
+<div id="checkoutModal" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;max-height:90vh;overflow-y:auto;">
+    <h3 class="modal-title">💳 ชำระเงิน</h3>
+    <div style="background:var(--surf2);border-radius:10px;padding:12px;margin-bottom:14px;text-align:center;">
+      <p style="font-size:11px;color:var(--t3);">ยอดที่ต้องชำระ</p>
+      <p id="coTotal" style="font-size:26px;font-weight:900;color:var(--t1);">฿0</p>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label class="rts-label">ประเภทใบเสร็จ</label>
+      <select id="invoiceType" class="rts-select" onchange="renderInvoiceFields()">
+        <option value="receipt">ใบเสร็จรับเงินทั่วไป</option>
+        <option value="abbreviated_tax_invoice">ใบกำกับภาษีอย่างย่อ</option>
+        <option value="full_tax_invoice">ใบกำกับภาษีเต็มรูป</option>
+      </select>
+    </div>
+    <div id="invoiceFields" style="display:none;flex-direction:column;gap:8px;margin-bottom:14px;">
+      <input id="custName" class="rts-input" placeholder="ชื่อลูกค้า / บริษัท">
+      <input id="custTaxId" class="rts-input" placeholder="เลขผู้เสียภาษี 13 หลัก" maxlength="13">
+      <input id="custAddress" class="rts-input" placeholder="ที่อยู่ออกใบกำกับภาษี">
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <label class="rts-label" style="margin:0;">ช่องทางชำระเงิน</label>
+      <button onclick="addPayRow()" class="abtn btn-gray" style="padding:3px 8px;font-size:10px;">+ เพิ่มช่องทาง</button>
+    </div>
+    <div id="payRows" style="margin-bottom:10px;"></div>
+    <button onclick="fillExactCash()" class="abtn btn-gray" style="width:100%;margin-bottom:10px;font-size:11px;">เงินสดพอดี (เติมยอดที่ขาด)</button>
+    <div style="background:var(--surf2);border-radius:8px;padding:10px;margin-bottom:14px;display:flex;justify-content:space-between;font-size:13px;font-weight:800;">
+      <span id="coRemainLabel" style="color:var(--t2);">ยังขาดอีก</span>
+      <span id="coRemainValue" style="color:var(--rd-t);">฿0</span>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="closeCheckout()" class="abtn btn-gray">ยกเลิก</button>
+      <button onclick="confirmSale()" id="confirmSaleBtn" class="abtn btn-solid-gn" disabled>✅ ยืนยันรับเงิน</button>
+    </div>
+  </div>
+</div>
+
+<!-- RECEIPT MODAL -->
+<div id="receiptModal" class="modal-overlay">
+  <div class="modal-box" style="max-width:380px;max-height:90vh;overflow-y:auto;padding:0;">
+    <div id="receiptPrintArea" class="receipt-box"></div>
+    <div style="display:flex;gap:8px;padding:14px;border-top:1.5px solid var(--bdr);">
+      <button onclick="window.print()" class="abtn btn-solid-nv" style="flex:1;">🖨️ พิมพ์</button>
+      <button onclick="closeReceiptAndReset()" class="abtn btn-solid-or" style="flex:1;">✅ ขายต่อ</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRICE MANAGER MODAL -->
+<div id="priceManagerModal" class="modal-overlay">
+  <div class="modal-box" style="max-width:640px;max-height:92vh;overflow-y:auto;">
+    <h3 class="modal-title">💰 จัดการราคา & โปรโมชั่น</h3>
+    <div style="display:flex;gap:4px;background:var(--surf2);padding:4px;border-radius:10px;margin-bottom:14px;">
+      <button id="pmtab-single" onclick="switchPriceTab('single')" class="tab-btn on-or">รายตัว</button>
+      <button id="pmtab-costimport" onclick="switchPriceTab('costimport')" class="tab-btn">นำเข้าจากทุน</button>
+      <button id="pmtab-bulkadjust" onclick="switchPriceTab('bulkadjust')" class="tab-btn">ปรับราคาทั้งหมด</button>
+      <button id="pmtab-promo" onclick="switchPriceTab('promo')" class="tab-btn">โปรโมชั่น</button>
+    </div>
+
+    <!-- TAB: รายตัว -->
+    <div id="pmpanel-single">
+      <input id="priceMgrSearch" class="rts-input" placeholder="ค้นหา SKU / ชื่อ..." style="margin-bottom:10px;" oninput="renderPriceManagerList()">
+      <div id="priceMgrList" style="display:flex;flex-direction:column;gap:6px;max-height:380px;overflow-y:auto;margin-bottom:14px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closePriceManager()" class="abtn btn-gray">ปิด</button>
+        <button onclick="savePriceManager()" id="priceMgrSaveBtn" class="abtn btn-solid-or">บันทึกราคา</button>
+      </div>
+    </div>
+
+    <!-- TAB: นำเข้าจากทุน -->
+    <div id="pmpanel-costimport" style="display:none;">
+      <label style="display:block;background:var(--surf2);border:2px dashed var(--bdr);border-radius:10px;padding:16px;text-align:center;cursor:pointer;margin-bottom:12px;">
+        <p style="font-size:12px;font-weight:800;color:var(--t1);margin-bottom:4px;">วางไฟล์ราคาทุน (.csv, .xlsx)</p>
+        <p style="font-size:10px;color:var(--t3);">ต้องมีคอลัมน์ SKU/รหัส และ ทุน/Cost (มีชื่อสินค้าด้วยก็ได้)</p>
+        <input type="file" id="costFileInput" accept=".csv,.xlsx,.xls" style="font-size:11px;" onchange="onCostFileSelected(event)">
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+        <div><label class="rts-label">สูตรคำนวณ</label><select id="costFormula" class="rts-select" onchange="recomputeCostPricing()">
+          <option value="markup_pct">บวก % จากทุน</option>
+          <option value="margin_pct">Margin % ของราคาขาย</option>
+          <option value="fixed_amount">บวกกำไรคงที่ (บาท)</option>
+        </select></div>
+        <div><label class="rts-label">ค่า</label><input type="number" id="costFormulaValue" class="rts-input" value="30" oninput="recomputeCostPricing()"></div>
+        <div><label class="rts-label">ปัดราคา</label><select id="costRoundMode" class="rts-select" onchange="recomputeCostPricing()">
+          <option value="none">ไม่ปัด</option>
+          <option value="int">ปัดขึ้นจำนวนเต็ม</option>
+          <option value="near5">ปัดใกล้ 5 บาท</option>
+          <option value="charm9">ลงท้าย 9 (เช่น 29,39)</option>
+        </select></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <p style="font-size:11px;font-weight:800;color:var(--t3);">ตัวอย่างราคา (แก้เป็นรายตัวได้)</p>
+        <span id="costPreviewCount" style="font-size:11px;color:var(--t3);"></span>
+      </div>
+      <div id="costPreviewList" style="display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto;border:1.5px solid var(--bdr);border-radius:8px;padding:8px;margin-bottom:12px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closePriceManager()" class="abtn btn-gray">ปิด</button>
+        <button onclick="applyCostPricing()" id="costApplyBtn" class="abtn btn-solid-or">💾 บันทึกราคาทั้งหมด</button>
+      </div>
+    </div>
+
+    <!-- TAB: ปรับราคาทั้งหมด -->
+    <div id="pmpanel-bulkadjust" style="display:none;">
+      <p style="font-size:11px;color:var(--t3);margin-bottom:10px;">เว้นช่องค้นหาไว้ = ปรับทุก SKU ที่ตั้งราคาแล้ว</p>
+      <input id="bulkAdjustFilter" class="rts-input" placeholder="ค้นหา SKU/ชื่อ ที่จะปรับ (เว้นว่าง = ทั้งหมด)" style="margin-bottom:10px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+        <div><label class="rts-label">รูปแบบ</label><select id="bulkAdjustType" class="rts-select">
+          <option value="inc_pct">เพิ่ม %</option>
+          <option value="dec_pct">ลด %</option>
+          <option value="inc_amt">เพิ่มจำนวนเงิน (บาท)</option>
+          <option value="dec_amt">ลดจำนวนเงิน (บาท)</option>
+        </select></div>
+        <div><label class="rts-label">ค่า</label><input type="number" id="bulkAdjustValue" class="rts-input" value="0"></div>
+      </div>
+      <button onclick="previewBulkAdjust()" class="abtn btn-gray" style="width:100%;margin-bottom:10px;">👁️ ดูตัวอย่างก่อนบันทึก</button>
+      <p id="bulkAdjustCount" style="font-size:11px;color:var(--t3);margin-bottom:6px;"></p>
+      <div id="bulkAdjustPreview" style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto;border:1.5px solid var(--bdr);border-radius:8px;padding:8px;margin-bottom:12px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closePriceManager()" class="abtn btn-gray">ปิด</button>
+        <button onclick="applyBulkAdjust()" id="bulkAdjustApplyBtn" class="abtn btn-solid-or" disabled>✅ ยืนยันปรับราคา</button>
+      </div>
+    </div>
+
+    <!-- TAB: โปรโมชั่น -->
+    <div id="pmpanel-promo" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <span style="font-size:12px;color:var(--t3);">ลด/ตั้งราคาพิเศษ เป็นช่วงเวลา ต่อ SKU</span>
+        <button onclick="openAddPromo()" class="abtn btn-solid-or" style="padding:5px 10px;font-size:11px;">+ เพิ่มโปรโมชั่น</button>
+      </div>
+      <div id="promoFormBox" style="display:none;border:1.5px solid var(--nv);background:var(--nv-bg);border-radius:10px;padding:12px;margin-bottom:12px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <input id="promoSku" class="rts-input" placeholder="SKU" style="text-transform:uppercase;">
+          <input id="promoName" class="rts-input" placeholder="ชื่อโปรโมชั่น (ถ้ามี)">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <select id="promoType" class="rts-select">
+            <option value="percent_off">ลด %</option>
+            <option value="amount_off">ลดจำนวนเงิน (บาท)</option>
+            <option value="fixed_price">ตั้งราคาพิเศษตรงๆ</option>
+          </select>
+          <input id="promoValue" type="number" class="rts-input" placeholder="ค่า">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          <div><label class="rts-label">เริ่ม</label><input id="promoStart" type="date" class="rts-input"></div>
+          <div><label class="rts-label">ถึง</label><input id="promoEnd" type="date" class="rts-input"></div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button onclick="closeAddPromo()" class="abtn btn-gray">ยกเลิก</button>
+          <button onclick="savePromo()" id="promoSaveBtn" class="abtn btn-solid-gn">บันทึกโปรโมชั่น</button>
+        </div>
+      </div>
+      <div id="promoList" style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;margin-bottom:12px;"></div>
+      <div style="display:flex;justify-content:flex-end;">
+        <button onclick="closePriceManager()" class="abtn btn-gray">ปิด</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   THEME (เหมือน RTS)
+============================================================ */
+let isNight=false;
+function applyTheme(n){isNight=n;document.body.className=n?'night':'';document.getElementById('themeIcon').textContent=n?'☀️':'🌙';localStorage.setItem('pos_theme',n?'night':'day');}
+function toggleTheme(){applyTheme(!isNight);}
+(function(){const sv=localStorage.getItem('pos_theme');if(sv)applyTheme(sv==='night');})();
+
+/* ============================================================
+   SUPABASE CLIENT — ฐานข้อมูลเดียวกับ RTS
+============================================================ */
+const SUPA_URL='https://gobvjimphlrftzjdveyi.supabase.co';
+const SUPA_KEY='sb_publishable_dEcZPgB7LeKw0somj4hxtg_mojBipec';
+let _sb=null;
+function initSb(){if(!_sb&&typeof supabase!=='undefined'){_sb=supabase.createClient(SUPA_URL,SUPA_KEY);}return _sb;}
+const sb=new Proxy({},{get:(_,prop)=>{const c=initSb();if(!c)throw new Error('Supabase not loaded yet');return c[prop].bind?c[prop].bind(c):c[prop];}});
+
+async function sha256(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');}
+function showToast(msg,type='info',dur=3000){const ic={success:'✅',error:'❌',info:'ℹ️',warn:'⚠️'};const el=document.createElement('div');el.className=`toast toast-${type}`;el.textContent=`${ic[type]||''} ${msg}`;document.getElementById('toast-container').appendChild(el);setTimeout(()=>{el.classList.add('removing');el.addEventListener('animationend',()=>el.remove());},dur);}
+function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function fmtMoney(n){return '฿'+(Math.round((n||0)*100)/100).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+/* ============================================================
+   INDEXEDDB — แคชสินค้า + คิวรอ sync (ทำงานได้แม้ไม่มีเน็ต)
+============================================================ */
+let _idb=null;
+function openDb(){
+  return new Promise((res,rej)=>{
+    if(_idb)return res(_idb);
+    const req=indexedDB.open('pos_local_db',2);
+    req.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains('products'))db.createObjectStore('products',{keyPath:'sku'});
+      if(!db.objectStoreNames.contains('outbox'))db.createObjectStore('outbox',{keyPath:'id'});
+      if(!db.objectStoreNames.contains('promotions'))db.createObjectStore('promotions',{keyPath:'id'});
+    };
+    req.onsuccess=e=>{_idb=e.target.result;res(_idb);};
+    req.onerror=()=>rej(req.error);
+  });
+}
+async function idbPut(store,val){const db=await openDb();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).put(val);tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);});}
+async function idbBulkPut(store,arr){const db=await openDb();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');const os=tx.objectStore(store);arr.forEach(v=>os.put(v));tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);});}
+async function idbGetAll(store){const db=await openDb();return new Promise((res,rej)=>{const tx=db.transaction(store,'readonly');const req=tx.objectStore(store).getAll();req.onsuccess=()=>res(req.result||[]);req.onerror=()=>rej(req.error);});}
+
+/* ============================================================
+   STATE
+============================================================ */
+let terminalConfig=null;   // {branch_code, terminal_code, terminal_name}
+let currentUser=null;
+let localCatalog=[];
+let cart=[];                // [{sku,name,price,qty}]
+let payRows=[{method:'cash',amount:''}];
+let realtimeChannel=null;
+let syncTimer=null;
+let activePromotions=[];    // โปรโมชั่นที่ is_active=true ทั้งหมด (เช็คช่วงวันที่ตอนใช้งานจริง)
+let costUploadParsed=[];    // แถวจากไฟล์ทุนที่อัปโหลด (รอตรวจสอบก่อนบันทึก)
+let bulkAdjustTargets=[];   // preview ของการปรับราคาทั้งหมด
+let promoManagerList=[];    // รายการโปรโมชั่นทั้งหมด (ทุกสถานะ) สำหรับหน้าจัดการ
+
+/* ============================================================
+   BOOT
+============================================================ */
+window.onload=()=>{
+  const t=localStorage.getItem('pos_terminal');
+  if(!t){document.getElementById('setupScreen').style.display='flex';return;}
+  terminalConfig=JSON.parse(t);
+  showLoginOrApp();
+};
+function showLoginOrApp(){
+  const u=localStorage.getItem('pos_session');
+  document.getElementById('setupScreen').style.display='none';
+  if(u){currentUser=JSON.parse(u);document.getElementById('loginScreen').style.display='none';startApp();}
+  else{document.getElementById('loginTerminalInfo').textContent=`${terminalConfig.branch_code} • ${terminalConfig.terminal_code}`;document.getElementById('loginScreen').style.display='flex';}
+}
+
+/* ── SETUP ── */
+async function saveSetup(){
+  const branch=document.getElementById('setupBranch').value.trim().toUpperCase();
+  const no=document.getElementById('setupTermNo').value.trim();
+  const name=document.getElementById('setupTermName').value.trim();
+  if(!branch||!no){showToast('กรอกรหัสสาขาและหมายเลขเครื่องครับ','warn');return;}
+  const terminal_code=`${branch}-POS${no.padStart(2,'0')}`;
+  terminalConfig={branch_code:branch,terminal_code,terminal_name:name||terminal_code};
+  localStorage.setItem('pos_terminal',JSON.stringify(terminalConfig));
+  try{await sb.from('pos_terminals').upsert([{terminal_code,branch_code:branch,terminal_name:terminalConfig.terminal_name}],{onConflict:'terminal_code'});}
+  catch(e){console.warn('ลงทะเบียนเครื่องไม่สำเร็จ (จะลองใหม่ตอนมีเน็ต):',e.message);}
+  showToast('ตั้งค่าเครื่องเรียบร้อย','success');
+  showLoginOrApp();
+}
+function resetTerminalSetup(){
+  if(!confirm('ล้างค่าเครื่องนี้ทั้งหมด (ต้องตั้งค่าใหม่)?'))return;
+  localStorage.removeItem('pos_terminal');localStorage.removeItem('pos_session');
+  location.reload();
+}
+
+/* ── LOGIN ── */
+async function doLogin(){
+  const un=document.getElementById('loginUser').value.trim().toLowerCase();
+  const pw=document.getElementById('loginPass').value;
+  const err=document.getElementById('loginError'),btn=document.getElementById('loginBtn');
+  err.style.display='none';
+  if(!un||!pw){err.textContent='กรุณากรอก username และ password';err.style.display='';return;}
+  btn.disabled=true;btn.textContent='⏳ กำลังเข้าสู่ระบบ...';
+  try{
+    const hash=await sha256(pw);
+    const{data,error}=await sb.from('users').select('*').eq('username',un).eq('password_hash',hash).eq('is_active',true).maybeSingle();
+    if(error)throw error;
+    if(!data){err.textContent='Username หรือ Password ไม่ถูกต้อง';err.style.display='';return;}
+    currentUser=data;
+    localStorage.setItem('pos_session',JSON.stringify(data)); // ค้างได้ทั้งวัน จนกว่าจะ logout เอง
+    document.getElementById('loginScreen').style.display='none';
+    startApp();
+  }catch(e){err.textContent='ไม่สามารถเชื่อมต่อได้ (ลองพิมพ์ใหม่เมื่อมีเน็ต): '+e.message;err.style.display='';}
+  finally{btn.disabled=false;btn.textContent='เข้าสู่ระบบ';}
+}
+function doLogout(){
+  if(!confirm('ออกจากระบบ?'))return;
+  localStorage.removeItem('pos_session');
+  if(realtimeChannel)sb.removeChannel(realtimeChannel);
+  if(syncTimer)clearInterval(syncTimer);
+  location.reload();
+}
+
+/* ============================================================
+   START APP
+============================================================ */
+async function startApp(){
+  document.getElementById('appScreen').style.display='block';
+  document.getElementById('ptBranch').textContent='สาขา '+terminalConfig.branch_code;
+  document.getElementById('ptTerminal').textContent=terminalConfig.terminal_name+' • '+terminalConfig.terminal_code;
+  document.getElementById('userAva').textContent=(currentUser.display_name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  if(currentUser.role==='admin'||currentUser.role==='manager')document.getElementById('priceMgrBtn').style.display='';
+
+  await loadCatalog();
+  await loadPromotions();
+  renderProductGrid(localCatalog);
+  subscribeRealtime();
+  syncTimer=setInterval(trySync,8000);
+  window.addEventListener('online',()=>{trySync();updateSyncBadge();});
+  window.addEventListener('offline',updateSyncBadge);
+  updateSyncBadge();
+  trySync();
+
+  const scanEl=document.getElementById('scanInput');
+  scanEl.focus();
+  scanEl.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){e.preventDefault();handleScanOrSearch(scanEl.value.trim());}
+  });
+  scanEl.addEventListener('input',()=>renderProductGrid(filterCatalog(scanEl.value.trim())));
+}
+
+/* ── CATALOG (ดึงจาก stock_locations pool ของสาขา + fallback แคชเมื่อออฟไลน์) ── */
+async function loadCatalog(){
+  const loc=terminalConfig.branch_code+'-POS';
+  try{
+    const[{data:prods,error:e1},{data:stocks,error:e2}]=await Promise.all([
+      sb.from('products').select('sku,name,price').gt('price',0),
+      sb.from('stock_locations').select('sku,quantity').eq('location_code',loc)
+    ]);
+    if(e1)throw e1; if(e2)throw e2;
+    const qtyMap={};(stocks||[]).forEach(s=>qtyMap[s.sku]=s.quantity);
+    localCatalog=(prods||[]).map(p=>({sku:p.sku,name:p.name,price:p.price,qty:qtyMap[p.sku]||0}));
+    await idbBulkPut('products',localCatalog);
+  }catch(e){
+    localCatalog=await idbGetAll('products');
+    if(localCatalog.length)showToast('ออฟไลน์ — ใช้ข้อมูลสินค้าที่แคชไว้ล่าสุด','warn');
+    else showToast('ยังไม่มีข้อมูลสินค้าแคชไว้ และเชื่อมต่อไม่ได้: '+e.message,'error',6000);
+  }
+}
+function filterCatalog(q){
+  if(!q)return localCatalog;
+  const ql=q.toLowerCase();
+  return localCatalog.filter(p=>p.sku.toLowerCase().includes(ql)||p.name.toLowerCase().includes(ql));
+}
+
+/* ── PROMOTIONS — โหลดทั้งหมดที่เปิดใช้งาน แล้วค่อยเช็คช่วงวันที่ตอนใช้จริง (รองรับออฟไลน์) ── */
+async function loadPromotions(){
+  try{
+    const{data,error}=await sb.from('pos_promotions').select('*').eq('is_active',true);
+    if(error)throw error;
+    activePromotions=data||[];
+    await idbBulkPut('promotions',activePromotions);
+  }catch(e){
+    try{activePromotions=await idbGetAll('promotions');}catch(e2){activePromotions=[];}
+  }
+}
+function getEffectivePrice(p){
+  const today=new Date().toISOString().slice(0,10);
+  const promo=activePromotions.find(pr=>pr.sku===p.sku&&pr.start_date<=today&&pr.end_date>=today);
+  if(!promo)return{price:p.price,promo:null};
+  let price=p.price;
+  if(promo.promo_type==='fixed_price')price=promo.value;
+  else if(promo.promo_type==='percent_off')price=p.price*(1-promo.value/100);
+  else if(promo.promo_type==='amount_off')price=p.price-promo.value;
+  return{price:Math.max(0,Math.round(price*100)/100),promo};
+}
+function renderProductGrid(list){
+  const grid=document.getElementById('productGrid'),empty=document.getElementById('catalogEmpty');
+  if(!localCatalog.length){grid.innerHTML='';empty.style.display='';return;}
+  empty.style.display='none';
+  const canEdit=currentUser.role==='admin'||currentUser.role==='manager';
+  grid.innerHTML=list.slice(0,120).map(p=>{
+    const out=p.qty<=0;
+    const qtyCls=out?'pill-r':p.qty<=5?'pill-am':'pill-g';
+    const eff=getEffectivePrice(p);
+    const priceHtml=eff.promo
+      ?`<p class="pt-price" style="color:var(--rd-t);"><span class="price-strike">${fmtMoney(p.price)}</span>${fmtMoney(eff.price)}<span class="promo-badge">🏷️</span></p>`
+      :`<p class="pt-price">${fmtMoney(p.price)}</p>`;
+    return `<div class="product-tile${out?' out':''}" onclick="addToCart('${escapeHtml(p.sku)}')">
+      <span class="pt-qty pill ${qtyCls}">${p.qty}</span>
+      <p class="pt-sku">${escapeHtml(p.sku)}</p>
+      <p class="pt-pname">${escapeHtml(p.name)}</p>
+      ${priceHtml}
+      ${canEdit?`<span class="pt-edit" onclick="event.stopPropagation();quickEditPrice('${escapeHtml(p.sku)}')">✏️</span>`:''}
+    </div>`;
+  }).join('');
+}
+function handleScanOrSearch(code){
+  if(!code)return;
+  const exact=localCatalog.find(p=>p.sku.toLowerCase()===code.toLowerCase());
+  if(exact){addToCart(exact.sku);document.getElementById('scanInput').value='';renderProductGrid(localCatalog);}
+  else{renderProductGrid(filterCatalog(code));showToast('ไม่พบ SKU ตรงเป๊ะ — แสดงผลค้นหาใกล้เคียงแทน','info',2000);}
+}
+
+/* ── REALTIME — เห็นสต็อคของสาขาตัวเองอัปเดตจากเครื่องอื่น/คลังแบบเรียลไทม์ ── */
+function subscribeRealtime(){
+  try{
+    realtimeChannel=sb.channel('branch-stock-'+terminalConfig.branch_code)
+      .on('postgres_changes',{event:'*',schema:'public',table:'stock_locations',filter:`branch_code=eq.${terminalConfig.branch_code}`},payload=>{
+        const row=payload.new||payload.old;
+        if(!row||row.location_code!==terminalConfig.branch_code+'-POS')return;
+        const item=localCatalog.find(p=>p.sku===row.sku);
+        if(item&&payload.new){item.qty=payload.new.quantity;idbPut('products',item);renderProductGrid(filterCatalog(document.getElementById('scanInput').value.trim()));}
+      }).subscribe();
+  }catch(e){console.warn('Realtime subscribe ล้มเหลว (ไม่กระทบการขาย):',e.message);}
+}
+
+/* ============================================================
+   CART
+============================================================ */
+function addToCart(sku){
+  const p=localCatalog.find(x=>x.sku===sku);
+  if(!p)return;
+  const eff=getEffectivePrice(p);
+  const existing=cart.find(c=>c.sku===sku);
+  if(existing)existing.qty+=1;
+  else cart.push({sku:p.sku,name:p.name,price:eff.price,original_price:p.price,promo:!!eff.promo,qty:1});
+  renderCart();
+}
+function changeQty(sku,delta){
+  const c=cart.find(x=>x.sku===sku);if(!c)return;
+  c.qty+=delta;
+  if(c.qty<=0)cart=cart.filter(x=>x.sku!==sku);
+  renderCart();
+}
+function removeFromCart(sku){cart=cart.filter(x=>x.sku!==sku);renderCart();}
+function computeTotals(){
+  const subtotal=cart.reduce((s,c)=>s+c.price*c.qty,0);
+  let discount=parseFloat(document.getElementById('discountInput').value||'0');
+  if(discount>subtotal)discount=subtotal;
+  if(discount<0)discount=0;
+  const total=subtotal-discount;          // ราคาสินค้ารวม VAT อยู่แล้ว (ปกติร้านค้าไทยตั้งราคาแบบ inclusive)
+  const vat=total-(total/1.07);
+  return{subtotal,discount,total,vat};
+}
+function renderCart(){
+  const wrap=document.getElementById('cartItems'),countEl=document.getElementById('cartCount');
+  countEl.textContent=cart.length?`${cart.length} รายการ`:'';
+  if(!cart.length){wrap.innerHTML='<p style="font-size:12px;color:var(--t3);text-align:center;padding:20px;">ยังไม่มีสินค้าในตะกร้า</p>';}
+  else{
+    wrap.innerHTML=cart.map(c=>`<div class="cart-item">
+      <div class="ci-info"><p class="ci-name">${escapeHtml(c.name)}${c.promo?'<span class="promo-badge">🏷️</span>':''}</p><p class="ci-price">${c.promo?`<span class="price-strike">${fmtMoney(c.original_price)}</span>`:''}${fmtMoney(c.price)} / หน่วย</p></div>
+      <div class="qty-stepper">
+        <button class="qs-btn" onclick="changeQty('${escapeHtml(c.sku)}',-1)">−</button>
+        <span class="qs-val">${c.qty}</span>
+        <button class="qs-btn" onclick="changeQty('${escapeHtml(c.sku)}',1)">+</button>
+      </div>
+      <span class="ci-total">${fmtMoney(c.price*c.qty)}</span>
+      <span class="ci-del" onclick="removeFromCart('${escapeHtml(c.sku)}')">✕</span>
+    </div>`).join('');
+  }
+  const t=computeTotals();
+  document.getElementById('sumSubtotal').textContent=fmtMoney(t.subtotal);
+  document.getElementById('sumDiscount').textContent='-'+fmtMoney(t.discount);
+  document.getElementById('sumVat').textContent=fmtMoney(t.vat);
+  document.getElementById('sumTotal').textContent=fmtMoney(t.total);
+  document.getElementById('checkoutBtn').disabled=cart.length===0;
+}
+
+/* ============================================================
+   CHECKOUT
+============================================================ */
+function openCheckout(){
+  if(!cart.length)return;
+  payRows=[{method:'cash',amount:''}];
+  document.getElementById('invoiceType').value='receipt';
+  renderInvoiceFields();
+  renderPayRows();
+  document.getElementById('checkoutModal').classList.add('show');
+}
+function closeCheckout(){document.getElementById('checkoutModal').classList.remove('show');}
+function renderInvoiceFields(){
+  const t=document.getElementById('invoiceType').value;
+  document.getElementById('invoiceFields').style.display=t==='receipt'?'none':'flex';
+}
+function addPayRow(){payRows.push({method:'cash',amount:''});renderPayRows();}
+function removePayRow(i){payRows.splice(i,1);renderPayRows();}
+function renderPayRows(){
+  const wrap=document.getElementById('payRows');
+  wrap.innerHTML=payRows.map((p,i)=>`<div class="pay-row">
+    <select class="rts-select" style="flex:1;" onchange="payRows[${i}].method=this.value">
+      <option value="cash" ${p.method==='cash'?'selected':''}>เงินสด</option>
+      <option value="transfer_qr" ${p.method==='transfer_qr'?'selected':''}>โอน/QR</option>
+      <option value="credit_card" ${p.method==='credit_card'?'selected':''}>บัตรเครดิต</option>
+      <option value="debit_card" ${p.method==='debit_card'?'selected':''}>บัตรเดบิต</option>
+      <option value="other" ${p.method==='other'?'selected':''}>อื่นๆ</option>
+    </select>
+    <input type="number" class="rts-input" style="width:110px;" placeholder="บาท" value="${p.amount}" oninput="payRows[${i}].amount=this.value;updateCheckoutSummary()">
+    ${payRows.length>1?`<span class="ci-del" onclick="removePayRow(${i})">✕</span>`:''}
+  </div>`).join('');
+  updateCheckoutSummary();
+}
+function fillExactCash(){
+  const t=computeTotals();
+  const paidOthers=payRows.slice(0,-1).reduce((s,p)=>s+(parseFloat(p.amount)||0),0);
+  payRows[payRows.length-1].amount=Math.max(0,t.total-paidOthers).toFixed(2);
+  renderPayRows();
+}
+function updateCheckoutSummary(){
+  const t=computeTotals();
+  document.getElementById('coTotal').textContent=fmtMoney(t.total);
+  const paid=payRows.reduce((s,p)=>s+(parseFloat(p.amount)||0),0);
+  const remain=t.total-paid;
+  const lbl=document.getElementById('coRemainLabel'),val=document.getElementById('coRemainValue');
+  if(remain>0.005){lbl.textContent='ยังขาดอีก';val.style.color='var(--rd-t)';val.textContent=fmtMoney(remain);}
+  else{lbl.textContent='เงินทอน';val.style.color='var(--gn-t)';val.textContent=fmtMoney(-remain);}
+  document.getElementById('confirmSaleBtn').disabled=paid<t.total-0.005;
+}
+
+function genDocNo(){const n=new Date();return `POS-${terminalConfig.terminal_code}-${n.getFullYear()}${String(n.getMonth()+1).padStart(2,'0')}${String(n.getDate()).padStart(2,'0')}-${String(n.getTime()).slice(-5)}`;}
+
+async function confirmSale(){
+  const t=computeTotals();
+  const paid=payRows.reduce((s,p)=>s+(parseFloat(p.amount)||0),0);
+  if(paid<t.total-0.005){showToast('ยอดจ่ายไม่พอครับ','warn');return;}
+  const invoiceType=document.getElementById('invoiceType').value;
+  const saleId=(crypto.randomUUID?crypto.randomUUID():'sale-'+Date.now()+'-'+Math.random().toString(16).slice(2));
+  const docNo=genDocNo();
+  const now=new Date().toISOString();
+
+  const sale={
+    id:saleId,doc_no:docNo,branch_code:terminalConfig.branch_code,terminal_code:terminalConfig.terminal_code,
+    cashier_id:currentUser.id,cashier_name:currentUser.display_name,sale_status:'completed',
+    subtotal:t.subtotal,discount_amount:t.discount,vat_amount:t.vat,total:t.total,
+    change_amount:Math.max(0,paid-t.total),
+    invoice_type:invoiceType,
+    customer_name:invoiceType!=='receipt'?(document.getElementById('custName').value.trim()||null):null,
+    customer_tax_id:invoiceType==='full_tax_invoice'?(document.getElementById('custTaxId').value.trim()||null):null,
+    customer_address:invoiceType==='full_tax_invoice'?(document.getElementById('custAddress').value.trim()||null):null,
+    sold_at:now
+  };
+  const items=cart.map(c=>({id:(crypto.randomUUID?crypto.randomUUID():'item-'+Date.now()+Math.random()),sale_id:saleId,sku:c.sku,product_name:c.name,qty:c.qty,unit_price:c.price,discount_amount:0,line_total:c.qty*c.price}));
+  const payments=payRows.filter(p=>parseFloat(p.amount)>0).map(p=>({id:(crypto.randomUUID?crypto.randomUUID():'pay-'+Date.now()+Math.random()),sale_id:saleId,method:p.method,amount:parseFloat(p.amount)}));
+
+  // หักสต็อคใน cache ของเครื่องตัวเองทันที (ให้เห็นเลขสมเหตุสมผลแม้ออฟไลน์)
+  cart.forEach(c=>{const p=localCatalog.find(x=>x.sku===c.sku);if(p){p.qty=Math.max(0,p.qty-c.qty);idbPut('products',p);}});
+
+  await idbPut('outbox',{id:saleId,sale,items,payments,synced:false,created_at:now});
+
+  showReceipt(sale,items,payments);
+  cart=[];renderCart();closeCheckout();renderProductGrid(filterCatalog(''));
+  trySync();
+}
+
+/* ============================================================
+   SYNC — ดันคิวขึ้น Supabase เบื้องหลัง (กันซ้ำด้วย UUID เดิม)
+============================================================ */
+async function trySync(){
+  if(!navigator.onLine){updateSyncBadge();return;}
+  let all=[];
+  try{all=await idbGetAll('outbox');}catch(e){return;}
+  const pending=all.filter(r=>!r.synced);
+  for(const rec of pending){
+    try{
+      const{error:e1}=await sb.from('pos_sales').upsert([rec.sale],{onConflict:'id'});if(e1)throw e1;
+      if(rec.items.length){const{error:e2}=await sb.from('pos_sale_items').upsert(rec.items,{onConflict:'id'});if(e2)throw e2;}
+      if(rec.payments.length){const{error:e3}=await sb.from('pos_payments').upsert(rec.payments,{onConflict:'id'});if(e3)throw e3;}
+      rec.synced=true;rec.synced_at=new Date().toISOString();
+      await idbPut('outbox',rec);
+    }catch(e){console.warn('sync ค้างไว้:',rec.sale.doc_no,e.message);break;} // หยุดแล้วลองรอบถัดไป กันยิงรัว
+  }
+  updateSyncBadge();
+}
+async function updateSyncBadge(){
+  const badge=document.getElementById('syncBadge');
+  let pendingCount=0;
+  try{pendingCount=(await idbGetAll('outbox')).filter(r=>!r.synced).length;}catch(e){}
+  if(navigator.onLine){
+    badge.className='sync-pill sync-on';
+    badge.textContent=pendingCount?`🟢 ออนไลน์ • ค้างส่ง ${pendingCount}`:'🟢 ออนไลน์';
+  }else{
+    badge.className='sync-pill sync-off';
+    badge.textContent=`🔴 ออฟไลน์${pendingCount?` • คิวค้าง ${pendingCount} บิล`:''}`;
+  }
+}
+
+/* ============================================================
+   RECEIPT
+============================================================ */
+function showReceipt(sale,items,payments){
+  const il={cash:'เงินสด',transfer_qr:'โอน/QR',credit_card:'บัตรเครดิต',debit_card:'บัตรเดบิต',other:'อื่นๆ'};
+  const lines=items.map(i=>`<div class="rline"><span>${escapeHtml(i.product_name)} x${i.qty}</span><span>${fmtMoney(i.line_total)}</span></div>`).join('');
+  const pays=payments.map(p=>`<div class="rline"><span>${il[p.method]||p.method}</span><span>${fmtMoney(p.amount)}</span></div>`).join('');
+  document.getElementById('receiptPrintArea').innerHTML=`
+    <div style="text-align:center;font-weight:800;">ใบเสร็จรับเงิน</div>
+    <div style="text-align:center;font-size:11px;">สาขา ${escapeHtml(sale.branch_code)} • ${escapeHtml(sale.terminal_code)}</div>
+    <div style="text-align:center;font-size:11px;">${escapeHtml(sale.doc_no)}</div>
+    <div style="text-align:center;font-size:11px;">${new Date(sale.sold_at).toLocaleString('th-TH')}</div>
+    <hr>${lines}<hr>
+    <div class="rline"><span>ยอดรวมสินค้า</span><span>${fmtMoney(sale.subtotal)}</span></div>
+    <div class="rline"><span>ส่วนลด</span><span>-${fmtMoney(sale.discount_amount)}</span></div>
+    <div class="rline" style="font-weight:800;"><span>รวมสุทธิ</span><span>${fmtMoney(sale.total)}</span></div>
+    <div class="rline" style="font-size:10px;color:#666;"><span>VAT ในราคา</span><span>${fmtMoney(sale.vat_amount)}</span></div>
+    <hr>${pays}
+    <div class="rline"><span>เงินทอน</span><span>${fmtMoney(sale.change_amount)}</span></div>
+    <hr><div style="text-align:center;font-size:11px;">แคชเชียร์: ${escapeHtml(sale.cashier_name||'-')}</div>
+    ${sale.invoice_type!=='receipt'?`<div style="text-align:center;font-size:10px;margin-top:6px;">${sale.invoice_type==='full_tax_invoice'?'ใบกำกับภาษีเต็มรูป':'ใบกำกับภาษีอย่างย่อ'}${sale.customer_name?'<br>'+escapeHtml(sale.customer_name):''}${sale.customer_tax_id?'<br>เลขผู้เสียภาษี '+escapeHtml(sale.customer_tax_id):''}</div>`:''}
+  `;
+  document.getElementById('receiptModal').classList.add('show');
+}
+function closeReceiptAndReset(){
+  document.getElementById('receiptModal').classList.remove('show');
+  document.getElementById('discountInput').value='0';
+  document.getElementById('scanInput').value='';
+  document.getElementById('scanInput').focus();
+}
+
+/* ============================================================
+   PRICE MANAGER (admin/manager เท่านั้น)
+============================================================ */
+let priceMgrDraft={};
+function openPriceManager(){
+  priceMgrDraft={};
+  document.getElementById('priceMgrSearch').value='';
+  switchPriceTab('single');
+  renderPriceManagerList();
+  document.getElementById('priceManagerModal').classList.add('show');
+}
+function closePriceManager(){document.getElementById('priceManagerModal').classList.remove('show');}
+function switchPriceTab(tab){
+  ['single','costimport','bulkadjust','promo'].forEach(t=>{
+    document.getElementById('pmtab-'+t).classList.remove('on-or');
+    document.getElementById('pmpanel-'+t).style.display='none';
+  });
+  document.getElementById('pmtab-'+tab).classList.add('on-or');
+  document.getElementById('pmpanel-'+tab).style.display='';
+  if(tab==='promo')loadPromoManagerList();
+}
+async function renderPriceManagerList(){
+  const q=document.getElementById('priceMgrSearch').value.trim().toLowerCase();
+  const wrap=document.getElementById('priceMgrList');
+  wrap.innerHTML='<p style="font-size:12px;color:var(--t3);text-align:center;padding:12px;">⏳ กำลังโหลด...</p>';
+  try{
+    let query=sb.from('products').select('sku,name,price,cost_price').order('sku').limit(200);
+    if(q)query=query.or(`sku.ilike.%${q}%,name.ilike.%${q}%`);
+    const{data,error}=await query;if(error)throw error;
+    wrap.innerHTML=(data||[]).map(p=>`<div style="display:flex;align-items:center;gap:8px;">
+      <div style="flex:1;min-width:0;"><p style="font-size:12px;font-weight:800;color:var(--t1);font-family:'Courier New',monospace;">${escapeHtml(p.sku)}</p><p style="font-size:11px;color:var(--t3);">${escapeHtml(p.name)}${p.cost_price?` • ทุน ${fmtMoney(p.cost_price)}`:''}</p></div>
+      <input type="number" class="rts-input" style="width:100px;" value="${p.price||0}" min="0" onchange="priceMgrDraft['${escapeHtml(p.sku)}']=this.value">
+    </div>`).join('')||'<p style="font-size:12px;color:var(--t3);text-align:center;padding:12px;">ไม่พบสินค้า</p>';
+  }catch(e){wrap.innerHTML=`<p style="font-size:12px;color:var(--rd-t);text-align:center;padding:12px;">❌ ${escapeHtml(e.message)}</p>`;}
+}
+async function savePriceManager(){
+  const skus=Object.keys(priceMgrDraft);
+  if(!skus.length){showToast('ไม่มีการเปลี่ยนแปลง','info');closePriceManager();return;}
+  const btn=document.getElementById('priceMgrSaveBtn');btn.disabled=true;btn.textContent='⏳...';
+  try{
+    for(const sku of skus){
+      const price=parseFloat(priceMgrDraft[sku]||'0');
+      const{error}=await sb.from('products').update({price}).eq('sku',sku);
+      if(error)throw error;
+      const item=localCatalog.find(p=>p.sku===sku);if(item)item.price=price;
+    }
+    showToast(`บันทึกราคา ${skus.length} รายการแล้ว`,'success');
+    await loadCatalog();renderProductGrid(localCatalog);
+    closePriceManager();
+  }catch(e){showToast('บันทึกล้มเหลว: '+e.message,'error');}
+  finally{btn.disabled=false;btn.textContent='บันทึกราคา';}
+}
+function quickEditPrice(sku){
+  const p=localCatalog.find(x=>x.sku===sku);if(!p)return;
+  openPriceManager();
+  document.getElementById('priceMgrSearch').value=sku;
+  renderPriceManagerList();
+}
+
+/* ── นำเข้าราคาจากไฟล์ทุน → คำนวณราคาขายอัตโนมัติ ── */
+function splitCsvLine(line){const res=[];let cur='',inQ=false;for(const ch of line){if(ch==='"'){inQ=!inQ;continue;}if(ch===','&&!inQ){res.push(cur.trim());cur='';continue;}cur+=ch;}res.push(cur.trim());return res;}
+function findColIdx(headers,keywords){return headers.findIndex(h=>keywords.some(k=>h.includes(k)));}
+
+function onCostFileSelected(e){
+  const f=e.target.files[0];if(!f)return;
+  const isCsv=f.name.toLowerCase().endsWith('.csv');
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const rows=isCsv?parseCostCsv(ev.target.result):parseCostXlsx(ev.target.result);
+      if(!rows||!rows.length){showToast('หาคอลัมน์ SKU/ทุน ไม่พบ หรือไฟล์ไม่มีข้อมูล','error');return;}
+      costUploadParsed=rows;
+      recomputeCostPricing();
+      showToast(`อ่านไฟล์ได้ ${rows.length} รายการ`,'success',2000);
+    }catch(err){showToast('อ่านไฟล์ล้มเหลว: '+err.message,'error');}
+  };
+  if(isCsv)reader.readAsText(f,'UTF-8');else reader.readAsArrayBuffer(f);
+}
+function parseCostCsv(text){
+  text=text.replace(/^\uFEFF/,'');
+  const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l);
+  if(lines.length<2)return[];
+  const headers=splitCsvLine(lines[0]).map(h=>h.toUpperCase().trim());
+  const si=findColIdx(headers,['SKU','รหัส','CODE','BARCODE']);
+  const ci=findColIdx(headers,['COST','ทุน','ต้นทุน']);
+  const ni=findColIdx(headers,['NAME','ชื่อ']);
+  if(si===-1||ci===-1)return[];
+  const out=[];
+  for(let i=1;i<lines.length;i++){
+    const cols=splitCsvLine(lines[i]);
+    const sku=String(cols[si]||'').trim().toUpperCase();
+    const cost=parseFloat(String(cols[ci]||'0').replace(/,/g,''))||0;
+    if(!sku)continue;
+    out.push({sku,cost,name:ni>=0?String(cols[ni]||'').trim():'',price:0});
+  }
+  return out;
+}
+function parseCostXlsx(buf){
+  const wb=XLSX.read(buf,{type:'array'});
+  const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+  if(!aoa.length)return[];
+  const headers=(aoa[0]||[]).map(h=>String(h).toUpperCase().trim());
+  const si=findColIdx(headers,['SKU','รหัส','CODE','BARCODE']);
+  const ci=findColIdx(headers,['COST','ทุน','ต้นทุน']);
+  const ni=findColIdx(headers,['NAME','ชื่อ']);
+  if(si===-1||ci===-1)return[];
+  const out=[];
+  for(let r=1;r<aoa.length;r++){
+    const sku=String(aoa[r][si]||'').trim().toUpperCase();
+    const cost=parseFloat(String(aoa[r][ci]||'0').replace(/,/g,''))||0;
+    if(!sku)continue;
+    out.push({sku,cost,name:ni>=0?String(aoa[r][ni]||'').trim():'',price:0});
+  }
+  return out;
+}
+function roundPriceValue(p,mode){
+  if(p<=0)return 0;
+  if(mode==='int')return Math.ceil(p);
+  if(mode==='near5')return Math.round(p/5)*5;
+  if(mode==='charm9'){let base=Math.floor(p/10)*10+9;if(base<p)base+=10;return base;}
+  return Math.round(p*100)/100;
+}
+function calcPriceFromCost(cost,formula,value){
+  if(formula==='markup_pct')return cost*(1+value/100);
+  if(formula==='margin_pct')return value<100?cost/(1-value/100):cost;
+  if(formula==='fixed_amount')return cost+value;
+  return cost;
+}
+function recomputeCostPricing(){
+  if(!costUploadParsed.length)return;
+  const formula=document.getElementById('costFormula').value;
+  const value=parseFloat(document.getElementById('costFormulaValue').value||'0');
+  const roundMode=document.getElementById('costRoundMode').value;
+  costUploadParsed.forEach(r=>{
+    if(!r._manualPrice)r.price=roundPriceValue(calcPriceFromCost(r.cost,formula,value),roundMode);
+  });
+  renderCostPreview();
+}
+function renderCostPreview(){
+  const wrap=document.getElementById('costPreviewList');
+  document.getElementById('costPreviewCount').textContent=costUploadParsed.length?`${costUploadParsed.length} รายการ`:'';
+  if(!costUploadParsed.length){wrap.innerHTML='<p style="font-size:12px;color:var(--t3);text-align:center;padding:12px;">ยังไม่มีไฟล์</p>';return;}
+  wrap.innerHTML=costUploadParsed.slice(0,300).map((r,i)=>{
+    const margin=r.price>0?(((r.price-r.cost)/r.price)*100).toFixed(1):'-';
+    return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;">
+      <span style="flex:1;min-width:0;font-family:'Courier New',monospace;font-weight:800;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(r.sku)}</span>
+      <span style="width:64px;text-align:right;color:var(--t3);">${fmtMoney(r.cost)}</span>
+      <input type="number" class="rts-input" style="width:78px;padding:4px 6px;" value="${r.price.toFixed(2)}" onchange="costUploadParsed[${i}]._manualPrice=true;costUploadParsed[${i}].price=parseFloat(this.value)||0;renderCostPreview();">
+      <span style="width:42px;text-align:right;color:var(--t3);">${margin}%</span>
+    </div>`;
+  }).join('');
+}
+async function applyCostPricing(){
+  if(!costUploadParsed.length){showToast('ยังไม่มีข้อมูล','warn');return;}
+  const btn=document.getElementById('costApplyBtn');btn.disabled=true;
+  const CHUNK=300;
+  try{
+    let updated=0,created=0;
+    for(let i=0;i<costUploadParsed.length;i+=CHUNK){
+      const chunk=costUploadParsed.slice(i,i+CHUNK);
+      btn.textContent=`⏳ ${Math.min(i+CHUNK,costUploadParsed.length)}/${costUploadParsed.length}`;
+      const{data:existing}=await sb.from('products').select('sku').in('sku',chunk.map(r=>r.sku));
+      const existSet=new Set((existing||[]).map(x=>x.sku));
+      const toUpdate=chunk.filter(r=>existSet.has(r.sku)).map(r=>({sku:r.sku,price:r.price,cost_price:r.cost}));
+      const toCreate=chunk.filter(r=>!existSet.has(r.sku)).map(r=>({sku:r.sku,name:r.name||`SKU: ${r.sku}`,price:r.price,cost_price:r.cost}));
+      if(toUpdate.length){const{error}=await sb.from('products').upsert(toUpdate,{onConflict:'sku'});if(error)throw error;updated+=toUpdate.length;}
+      if(toCreate.length){const{error}=await sb.from('products').insert(toCreate);if(error)throw error;created+=toCreate.length;}
+    }
+    showToast(`อัปเดตราคา ${updated} รายการ • สร้างสินค้าใหม่ ${created} รายการ`,'success',5000);
+    costUploadParsed=[];renderCostPreview();document.getElementById('costFileInput').value='';
+    await loadCatalog();renderProductGrid(localCatalog);
+  }catch(e){showToast('บันทึกล้มเหลว: '+e.message,'error');}
+  finally{btn.disabled=false;btn.textContent='💾 บันทึกราคาทั้งหมด';}
+}
+
+/* ── ปรับราคาทั้งหมด (เพิ่ม/ลด % หรือจำนวนเงิน) ── */
+function previewBulkAdjust(){
+  const q=document.getElementById('bulkAdjustFilter').value.trim().toLowerCase();
+  const type=document.getElementById('bulkAdjustType').value;
+  const value=parseFloat(document.getElementById('bulkAdjustValue').value||'0');
+  const scope=q?localCatalog.filter(p=>p.sku.toLowerCase().includes(q)||p.name.toLowerCase().includes(q)):localCatalog;
+  bulkAdjustTargets=scope.map(p=>{
+    let np=p.price;
+    if(type==='inc_pct')np=p.price*(1+value/100);
+    else if(type==='dec_pct')np=p.price*(1-value/100);
+    else if(type==='inc_amt')np=p.price+value;
+    else if(type==='dec_amt')np=p.price-value;
+    return{sku:p.sku,name:p.name,oldPrice:p.price,newPrice:Math.max(0,Math.round(np*100)/100)};
+  });
+  renderBulkAdjustPreview();
+}
+function renderBulkAdjustPreview(){
+  document.getElementById('bulkAdjustCount').textContent=bulkAdjustTargets.length?`${bulkAdjustTargets.length} รายการที่จะถูกปรับ`:'';
+  const wrap=document.getElementById('bulkAdjustPreview');
+  if(!bulkAdjustTargets.length){wrap.innerHTML='<p style="font-size:12px;color:var(--t3);text-align:center;padding:12px;">กดดูตัวอย่างก่อนบันทึก</p>';}
+  else{
+    wrap.innerHTML=bulkAdjustTargets.slice(0,15).map(r=>`<div style="display:flex;justify-content:space-between;font-size:11px;"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%;">${escapeHtml(r.sku)} ${escapeHtml(r.name)}</span><span>${fmtMoney(r.oldPrice)} → <b style="color:var(--nv-t);">${fmtMoney(r.newPrice)}</b></span></div>`).join('')
+      +(bulkAdjustTargets.length>15?`<p style="font-size:10px;color:var(--t3);margin-top:4px;">...และอีก ${bulkAdjustTargets.length-15} รายการ</p>`:'');
+  }
+  document.getElementById('bulkAdjustApplyBtn').disabled=bulkAdjustTargets.length===0;
+}
+async function applyBulkAdjust(){
+  if(!bulkAdjustTargets.length)return;
+  if(!confirm(`ยืนยันปรับราคา ${bulkAdjustTargets.length} รายการ?`))return;
+  const btn=document.getElementById('bulkAdjustApplyBtn');btn.disabled=true;btn.textContent='⏳...';
+  try{
+    const CHUNK=300;
+    for(let i=0;i<bulkAdjustTargets.length;i+=CHUNK){
+      const chunk=bulkAdjustTargets.slice(i,i+CHUNK).map(r=>({sku:r.sku,price:r.newPrice}));
+      const{error}=await sb.from('products').upsert(chunk,{onConflict:'sku'});if(error)throw error;
+    }
+    showToast(`ปรับราคาแล้ว ${bulkAdjustTargets.length} รายการ`,'success');
+    bulkAdjustTargets=[];renderBulkAdjustPreview();
+    await loadCatalog();renderProductGrid(localCatalog);
+  }catch(e){showToast('ล้มเหลว: '+e.message,'error');}
+  finally{btn.disabled=false;btn.textContent='✅ ยืนยันปรับราคา';}
+}
+
+/* ── โปรโมชั่น ── */
+async function loadPromoManagerList(){
+  const wrap=document.getElementById('promoList');
+  wrap.innerHTML='<p style="font-size:12px;color:var(--t3);text-align:center;padding:12px;">⏳ กำลังโหลด...</p>';
+  try{
+    const{data,error}=await sb.from('pos_promotions').select('*').order('start_date',{ascending:false}).limit(100);
+    if(error)throw error;
+    promoManagerList=data||[];
+    renderPromoManagerList();
+  }catch(e){wrap.innerHTML=`<p style="font-size:12px;color:var(--rd-t);text-align:center;padding:12px;">❌ ${escapeHtml(e.message)}</p>`;}
+}
+function promoStatus(p){
+  const today=new Date().toISOString().slice(0,10);
+  if(!p.is_active)return{label:'ปิดใช้งาน',cls:'pill-am'};
+  if(today<p.start_date)return{label:'รอเริ่ม',cls:'pill-o'};
+  if(today>p.end_date)return{label:'หมดอายุ',cls:'pill-r'};
+  return{label:'กำลังใช้งาน',cls:'pill-g'};
+}
+function renderPromoManagerList(){
+  const tl={fixed_price:'ราคาพิเศษ',percent_off:'ลด %',amount_off:'ลดจำนวนเงิน'};
+  const wrap=document.getElementById('promoList');
+  if(!promoManagerList.length){wrap.innerHTML='<p style="font-size:12px;color:var(--t3);text-align:center;padding:12px;">ยังไม่มีโปรโมชั่น</p>';return;}
+  wrap.innerHTML=promoManagerList.map(p=>{
+    const st=promoStatus(p);
+    const valLabel=p.promo_type==='fixed_price'?fmtMoney(p.value):p.promo_type==='percent_off'?`-${p.value}%`:`-${fmtMoney(p.value)}`;
+    return `<div style="border:1.5px solid var(--bdr);border-radius:10px;padding:10px;background:var(--surf);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div><p style="font-size:12px;font-weight:800;color:var(--t1);font-family:'Courier New',monospace;">${escapeHtml(p.sku)}</p>
+        <p style="font-size:11px;color:var(--t3);">${tl[p.promo_type]} ${valLabel} • ${escapeHtml(p.start_date)} ถึง ${escapeHtml(p.end_date)}</p>
+        ${p.promo_name?`<p style="font-size:11px;color:var(--t3);font-style:italic;">${escapeHtml(p.promo_name)}</p>`:''}</div>
+        <span class="pill ${st.cls}">${st.label}</span>
+      </div>
+      <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px;">
+        <button onclick="togglePromoActive('${p.id}',${p.is_active})" class="abtn btn-gray" style="padding:3px 8px;font-size:10px;">${p.is_active?'ปิดใช้งาน':'เปิดใช้งาน'}</button>
+        <button onclick="deletePromo('${p.id}')" class="abtn btn-rd" style="padding:3px 8px;font-size:10px;">ลบ</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function openAddPromo(){
+  ['promoSku','promoName','promoValue'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('promoType').value='percent_off';
+  document.getElementById('promoStart').value=new Date().toISOString().slice(0,10);
+  document.getElementById('promoEnd').value='';
+  document.getElementById('promoFormBox').style.display='';
+}
+function closeAddPromo(){document.getElementById('promoFormBox').style.display='none';}
+async function savePromo(){
+  const sku=document.getElementById('promoSku').value.trim().toUpperCase();
+  const type=document.getElementById('promoType').value;
+  const value=parseFloat(document.getElementById('promoValue').value||'0');
+  const start=document.getElementById('promoStart').value;
+  const end=document.getElementById('promoEnd').value;
+  const name=document.getElementById('promoName').value.trim();
+  if(!sku||!value||!start||!end){showToast('กรอกข้อมูลให้ครบ','warn');return;}
+  if(end<start){showToast('วันสิ้นสุดต้องไม่ก่อนวันเริ่ม','warn');return;}
+  const btn=document.getElementById('promoSaveBtn');btn.disabled=true;btn.textContent='⏳...';
+  try{
+    const{error}=await sb.from('pos_promotions').insert([{sku,promo_name:name||null,promo_type:type,value,start_date:start,end_date:end,is_active:true}]);
+    if(error)throw error;
+    showToast('สร้างโปรโมชั่นแล้ว','success');
+    closeAddPromo();await loadPromoManagerList();await loadPromotions();renderProductGrid(filterCatalog(''));
+  }catch(e){showToast('ล้มเหลว (เช็คว่า SKU มีอยู่จริงไหม): '+e.message,'error',5000);}
+  finally{btn.disabled=false;btn.textContent='บันทึกโปรโมชั่น';}
+}
+async function togglePromoActive(id,isActive){
+  await sb.from('pos_promotions').update({is_active:!isActive}).eq('id',id);
+  await loadPromoManagerList();await loadPromotions();renderProductGrid(filterCatalog(''));
+}
+async function deletePromo(id){
+  if(!confirm('ลบโปรโมชั่นนี้?'))return;
+  await sb.from('pos_promotions').delete().eq('id',id);
+  await loadPromoManagerList();await loadPromotions();renderProductGrid(filterCatalog(''));
+}
+</script>
+</body>
+</html>
